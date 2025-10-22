@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Share Volume Data for [Entity Name]</title>
+<script>
+// Extract URL parameter
+function getParameterByName(name) {
+  const url = new URL(window.location.href);
+  return url.searchParams.get(name);
+}
+
+// Format number with commas
+function formatNumber(num) {
+  return num.toLocaleString();
+}
+
+const defaultCIK = '0001002910'; // Default CIK
+const apiBase = 'https://data.sec.gov/api/xbrl/companyconcept/CIK';
+const proxyUrl = 'https://api.allorigins.win/raw?url=';
+
+// Paths for fetched data
+let currentCIK = getParameterByName('CIK') || defaultCIK;
+const apiUrl = `${apiBase}${currentCIK}/dei/EntityCommonStockSharesOutstanding.json`;
+
+// Elements
+const titleElem = document.title;
+const entityNameElem = document.getElementById('share-entity-name');
+const maxValElem = document.getElementById('share-max-value');
+const maxFyElem = document.getElementById('share-max-fy');
+const minValElem = document.getElementById('share-min-value');
+const minFyElem = document.getElementById('share-min-fy');
+
+// Initialize
+function updateData() {
+  fetch(proxyUrl + encodeURIComponent(apiUrl), {
+    headers: {
+      'User-Agent': 'Mozilla/5.0 (compatible; ShareVolumeApp/1.0)'
+    }
+  })
+  .then(response => response.json())
+  .then(data => {
+    const entityName = data.entityName || 'Unknown Entity';
+    document.title = `Share Volume Data for ${entityName}`;
+    document.querySelector('h1').textContent = `Share Volume Data for ${entityName}`;
+    entityNameElem.textContent = entityName;
+
+    const shares = data.units?.shares || [];
+    const filteredShares = shares.filter(s => s.fy > '2020' && !isNaN(parseFloat(s.val)));
+
+    if (filteredShares.length === 0) {
+      maxValElem.textContent = 'N/A';
+      maxFyElem.textContent = 'N/A';
+      minValElem.textContent = 'N/A';
+      minFyElem.textContent = 'N/A';
+      return;
+    }
+
+    const maxShare = filteredShares.reduce((prev, current) => {
+      if (parseFloat(current.val) > parseFloat(prev.val)) {
+        return current;
+      } else if (parseFloat(current.val) === parseFloat(prev.val)) {
+        // Tie-breaker if needed
+        return current;
+      } else {
+        return prev;
+      }
+    });
+
+    const minShare = filteredShares.reduce((prev, current) => {
+      if (parseFloat(current.val) < parseFloat(prev.val)) {
+        return current;
+      } else if (parseFloat(current.val) === parseFloat(prev.val)) {
+        // Tie-breaker if needed
+        return current;
+      } else {
+        return prev;
+      }
+    });
+
+    // Update max
+    document.getElementById('share-entity-name').textContent = entityName;
+    document.getElementById('share-max-value').textContent = formatNumber(parseFloat(maxShare.val));
+    document.getElementById('share-max-fy').textContent = maxShare.fy;
+
+    // Update min
+    document.getElementById('share-min-value').textContent = formatNumber(parseFloat(minShare.val));
+    document.getElementById('share-min-fy').textContent = minShare.fy;
+  })
+  .catch(err => {
+    console.error('Error fetching data:', err);
+  });
+}
+
+// Load UID data from attachment
+function loadUID() {
+  fetch('static/uid.txt')
+    .then(res => res.text())
+    .then(text => {
+      const pre = document.createElement('pre');
+      pre.textContent = text;
+      document.body.appendChild(pre);
+    });
+}
+
+// Handle CIK parameter change
+function updateForCIK(cik) {
+  const newUrl = new URL(window.location.href);
+  newUrl.searchParams.set('CIK', cik);
+  window.history.pushState({}, '', newUrl);
+  currentCIK = cik;
+  // Update apiUrl
+  fetch(apiBase + cik + '/dei/EntityCommonStockSharesOutstanding.json')
+    .then(() => {
+      updateData();
+    });
+}
+
+window.addEventListener('popstate', () => {
+  // Handle back/forward navigation
+  const cikParam = getParameterByName('CIK') || defaultCIK;
+  if (cikParam !== currentCIK) {
+    updateForCIK(cikParam);
+  }
+});
+
+// Initial load
+loadUID();
+updateData();
+</script>
+<style>
+body {
+  font-family: Arial, sans-serif;
+  margin: 20px;
+}
+h1 {
+  color: #2c3e50;
+}
+table {
+  width: 50%;
+  border-collapse: collapse;
+  margin-top: 20px;
+}
+th, td {
+  border: 1px solid #ddd;
+  padding: 8px;
+  text-align: center;
+}
+th {
+  background-color: #f2f2f2;
+}
+</style>
+</head>
+<body>
+<h1>Share Volume Data for [Entity Name]</h1>
+<table>
+<tr>
+  <th>Parameter</th>
+  <th>Value</th>
+</tr>
+<tr>
+  <td>Entity Name</td>
+  <td id="share-entity-name"></td>
+</tr>
+<tr>
+  <td>Max Share Count</td>
+  <td id="share-max-value"></td>
+</tr>
+<tr>
+  <td>Max FY</td>
+  <td id="share-max-fy"></td>
+</tr>
+<tr>
+  <td>Min Share Count</td>
+  <td id="share-min-value"></td>
+</tr>
+<tr>
+  <td>Min FY</td>
+  <td id="share-min-fy"></td>
+</tr>
+</table>
+<script>
+// Replace placeholders
+const entityTitle = document.querySelector('title');
+const headerH1 = document.querySelector('h1');
+const entityNamePlaceholder = '[Entity Name]';
+// Initialize with default info
+updateData();
+</script>
+</body>
+</html>
